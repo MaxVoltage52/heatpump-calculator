@@ -1,65 +1,48 @@
-import React, { useMemo, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  LineChart, Line, Legend
-} from "recharts";
+import React, { useMemo, useState } from 'react'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 // ---------- Helpers ----------
-function toNumber(value, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-function parsePairs(text) {
-  return text
-    .split(/\n|,/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((pair) => {
-      const [a, b] = pair.split(":").map((t) => t.trim());
-      return { x: Number(a), y: Number(b) };
-    })
-    .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
-    .sort((a, b) => a.x - b.x);
-}
-function interpCOP(table, t) {
-  if (!table || table.length === 0) return 2.2;
-  if (t <= table[0].x) return table[0].y;
-  if (t >= table[table.length - 1].x) return table[table.length - 1].y;
-  for (let i = 0; i < table.length - 1; i++) {
-    const a = table[i], b = table[i + 1];
-    if (t >= a.x && t <= b.x) {
-      const frac = (t - a.x) / (b.x - a.x || 1);
-      return a.y + frac * (b.y - a.y);
+const num = (v, d=0) => Number.isFinite(+v) ? +v : d
+const pairs = (txt) => txt.split(/\n|,/).map(s=>s.trim()).filter(Boolean)
+  .map(p => { const [a,b]=p.split(':').map(s=>s.trim()); return {x:+a,y:+b} })
+  .filter(p => Number.isFinite(p.x)&&Number.isFinite(p.y))
+  .sort((a,b)=>a.x-b.x)
+
+const interp = (tbl, t) => {
+  if (!tbl.length) return 2.2
+  if (t <= tbl[0].x) return tbl[0].y
+  if (t >= tbl[tbl.length-1].x) return tbl[tbl.length-1].y
+  for (let i=0;i<tbl.length-1;i++){
+    const a=tbl[i], b=tbl[i+1]
+    if (t>=a.x && t<=b.x){
+      const f = (t-a.x)/(b.x-a.x || 1)
+      return a.y + f*(b.y-a.y)
     }
   }
-  return table[table.length - 1].y;
-}
-function normalizeBins(bins) {
-  const total = bins.reduce((s, r) => s + r.y, 0) || 1;
-  return bins.map((r) => ({ x: r.x, y: (r.y * 100) / total }));
+  return tbl[tbl.length-1].y
 }
 
-// ---------- Defaults (Chicago profile you used) ----------
-const DEFAULTS = {
+const normBins = (bins) => {
+  const s = bins.reduce((k,b)=>k+b.y,0) || 1
+  return bins.map(b=>({x:b.x, y:b.y*100/s}))
+}
+
+// ---------- Defaults ----------
+const D = {
   kwhBase: 97300,
   supplyC: 3.331,
   txC: 1.767,
   dfcNon: 6.062,
-  dfcEH: 2.924,
+  dfcEH:  2.924,
   gasSupply: 0.52,
-  gasDist: 0.2134,
+  gasDist:   0.2134,
   afue: 0.95,
   heatMMBtu: 37.5,
   seasonalCOP: 2.2,
   gross: 10354,
-  credits: 2600,
-};
+  credits: 2600
+}
+
 const DEFAULT_COP = `60:3.77
 55:3.56
 50:3.39
@@ -74,7 +57,8 @@ const DEFAULT_COP = `60:3.77
 5:2.00
 0:1.87
 -5:1.74
--10:1.65`;
+-10:1.65`
+
 const DEFAULT_BINS = `60:0
 55:2
 50:4
@@ -89,402 +73,273 @@ const DEFAULT_BINS = `60:0
 5:6
 0:3
 -5:1.5
--10:0.5`;
+-10:0.5`
 
-// ---------- Component ----------
-export default function App() {
-  const [inputs, setInputs] = useState({
-    kwhBase: String(DEFAULTS.kwhBase),
-    supplyC: String(DEFAULTS.supplyC),
-    txC: String(DEFAULTS.txC),
-    dfcNon: String(DEFAULTS.dfcNon),
-    dfcEH: String(DEFAULTS.dfcEH),
-    gasSupply: String(DEFAULTS.gasSupply),
-    gasDist: String(DEFAULTS.gasDist),
-    afue: String(DEFAULTS.afue),
-    heatMMBtu: String(DEFAULTS.heatMMBtu),
-    seasonalCOP: String(DEFAULTS.seasonalCOP),
-    gross: String(DEFAULTS.gross),
-    credits: String(DEFAULTS.credits),
-  });
-  const [useCopTable, setUseCopTable] = useState(true);
-  const [copText, setCopText] = useState(DEFAULT_COP);
-  const [binsText, setBinsText] = useState(DEFAULT_BINS);
+export default function App(){
+  const [f, setF] = useState({
+    kwhBase: String(D.kwhBase),
+    supplyC: String(D.supplyC),
+    txC: String(D.txC),
+    dfcNon: String(D.dfcNon),
+    dfcEH:  String(D.dfcEH),
+    gasSupply: String(D.gasSupply),
+    gasDist:   String(D.gasDist),
+    afue: String(D.afue),
+    heatMMBtu: String(D.heatMMBtu),
+    seasonalCOP: String(D.seasonalCOP),
+    gross: String(D.gross),
+    credits: String(D.credits),
+  })
+  const [useTable, setUseTable] = useState(true)
+  const [copText, setCopText] = useState(DEFAULT_COP)
+  const [binsText, setBinsText] = useState(DEFAULT_BINS)
 
-  const upd = (k, v) => setInputs((s) => ({ ...s, [k]: v }));
+  const calc = useMemo(()=>{
+    const kwhBase = num(f.kwhBase, D.kwhBase)
+    const supplyC = num(f.supplyC, D.supplyC)
+    const txC     = num(f.txC, D.txC)
+    const dfcNon  = num(f.dfcNon, D.dfcNon)
+    const dfcEH   = num(f.dfcEH, D.dfcEH)
+    const gasSupply = num(f.gasSupply, D.gasSupply)
+    const gasDist   = num(f.gasDist, D.gasDist)
+    const afue      = num(f.afue, D.afue)
+    const heatMMBtu = num(f.heatMMBtu, D.heatMMBtu)
+    const seasonalCOP = num(f.seasonalCOP, D.seasonalCOP)
+    const gross = num(f.gross, D.gross)
+    const credits = num(f.credits, D.credits)
 
-  const calc = useMemo(() => {
-    const kWhBase = toNumber(inputs.kwhBase, DEFAULTS.kwhBase);
-    const supplyC = toNumber(inputs.supplyC, DEFAULTS.supplyC);
-    const txC = toNumber(inputs.txC, DEFAULTS.txC);
-    const dfcNon = toNumber(inputs.dfcNon, DEFAULTS.dfcNon);
-    const dfcEH = toNumber(inputs.dfcEH, DEFAULTS.dfcEH);
-    const gasSupply = toNumber(inputs.gasSupply, DEFAULTS.gasSupply);
-    const gasDist = toNumber(inputs.gasDist, DEFAULTS.gasDist);
-    const afue = toNumber(inputs.afue, DEFAULTS.afue);
-    const heatMMBtu = toNumber(inputs.heatMMBtu, DEFAULTS.heatMMBtu);
-    const seasonalCOP = toNumber(inputs.seasonalCOP, DEFAULTS.seasonalCOP);
-    const gross = toNumber(inputs.gross, DEFAULTS.gross);
-    const credits = toNumber(inputs.credits, DEFAULTS.credits);
+    const gasAllIn = gasSupply + gasDist
+    const allInNon = (supplyC + txC + dfcNon)/100
+    const allInEH  = (supplyC + txC + dfcEH)/100
 
-    const gasAllIn = gasSupply + gasDist;            // $/therm
-    const allInNon = (supplyC + txC + dfcNon) / 100; // $/kWh
-    const allInEH  = (supplyC + txC + dfcEH) / 100;  // $/kWh
+    // Baseline
+    const baselineElec = kwhBase * allInNon
+    const baselineGas  = (heatMMBtu/0.1/afue) * gasAllIn
+    const baseline = baselineElec + baselineGas
 
-    // Baseline (Gas + AC)
-    const baselineElec = kWhBase * allInNon;
-    const baselineGas  = (heatMMBtu / 0.1 / afue) * gasAllIn;
-    const baseline     = baselineElec + baselineGas;
+    // All-electric
+    let hpKWh = 0
+    let hybrid = null, hybridGas=0, hybridHPkWh=0
 
-    // All-electric HP and Hybrid by bins (if COP table provided)
-    let hpKWh = (heatMMBtu * 293.071) / seasonalCOP; // fallback if not using table
-    let hybrid = null, hybridGasMMBtu = 0, hybridHPkWh = 0;
-
-    // per-bin matrix rows
-    let matrix = [];
-
-    if (useCopTable) {
-      const table = parsePairs(copText);
-      const bins  = normalizeBins(parsePairs(binsText));
-      hpKWh = 0;
-
-      const costGasPerMMBtu = (1 / 0.1 / afue) * gasAllIn; // $/MMBtu delivered
-      let costHPsum = 0, costGASsum = 0;
-
-      for (const b of bins) {
-        const t = b.x;
-        const mmbtu = heatMMBtu * (b.y / 100);
-        const cop = interpCOP(table, t);
-        const kwhPerMMBtu = 293.071 / cop;
-        const costHPperMMBtu = kwhPerMMBtu * allInEH;
-
-        // accumulate for all-electric
-        hpKWh += mmbtu * kwhPerMMBtu;
-
-        // hybrid choose cheaper
-        let cheaper = "HP";
-        if (costHPperMMBtu <= costGasPerMMBtu) {
-          costHPsum += mmbtu * costHPperMMBtu;
-          hybridHPkWh += mmbtu * kwhPerMMBtu;
+    if (useTable){
+      const table = pairs(copText)
+      const bins  = normBins(pairs(binsText))
+      for (const b of bins){
+        const cop = interp(table, b.x)
+        const mmbtu = heatMMBtu*(b.y/100)
+        hpKWh += (mmbtu*293.071)/cop
+      }
+      // Hybrid choose cheapest by bin
+      const costGasPerMMBtu = (1/0.1/afue)*gasAllIn
+      let costHPsum=0, costGASsum=0
+      for (const b of bins){
+        const cop = interp(table, b.x)
+        const mmbtu = heatMMBtu*(b.y/100)
+        const kwhPerMMBtu = 293.071 / cop
+        const costHPperMMBtu = kwhPerMMBtu * allInEH
+        if (costHPperMMBtu <= costGasPerMMBtu){
+          costHPsum += mmbtu*costHPperMMBtu
+          hybridHPkWh += mmbtu*kwhPerMMBtu
         } else {
-          cheaper = "Gas";
-          costGASsum += mmbtu * costGasPerMMBtu;
-          hybridGasMMBtu += mmbtu;
+          costGASsum += mmbtu*costGasPerMMBtu
+          hybridGas += mmbtu
         }
-
-        matrix.push({
-          t,
-          pct: +b.y.toFixed(2),
-          cop: +cop.toFixed(2),
-          hpCost: +costHPperMMBtu.toFixed(2),
-          gasCost: +costGasPerMMBtu.toFixed(2),
-          cheaper
-        });
       }
-      hybrid = kWhBase * allInEH + costHPsum + costGASsum;
-    }
+      hybrid = kwhBase*allInEH + costHPsum + costGASsum
 
-    const allElectric = (kWhBase + hpKWh) * allInEH;
-    const savingsAll = baseline - allElectric;
-    const savingsHybrid = hybrid != null ? baseline - hybrid : null;
-
-    const net = gross - credits;
-    const paybackAll = savingsAll > 0 ? net / savingsAll : null;
-    const paybackHybrid = savingsHybrid && savingsHybrid > 0 ? net / savingsHybrid : null;
-
-    const dfcSavings = kWhBase * ((dfcNon - dfcEH) / 100);
-
-    // crossover temp + series for chart
-    const costGasPerMMBtu = (1 / 0.1 / afue) * gasAllIn;
-    let crossoverTemp = null;
-    let crossoverNote = "";
-    let crossoverSeries = [];
-
-    if (useCopTable) {
-      const table = parsePairs(copText);
-      if (table.length > 1) {
-        const tMin = Math.min(-20, table[0].x);
-        const tMax = Math.max(65, table[table.length - 1].x);
-        const hpCost = (t) => (293.071 / interpCOP(table, t)) * allInEH;
-        let prevT = tMin;
-        let prevDiff = hpCost(prevT) - costGasPerMMBtu;
-        for (let t = tMin; t <= tMax; t++) {
-          const cHP = hpCost(t);
-          crossoverSeries.push({ t, hp: cHP, gas: costGasPerMMBtu });
-          const diff = cHP - costGasPerMMBtu;
+      // ---- Crossover temperature (HP $/MMBtu = Gas $/MMBtu) ----
+      // Solve for T where (293.071 / COP(T)) * allInEH == (1/0.1/afue) * gasAllIn
+      let crossoverTemp = null
+      let crossoverNote = ""
+      if (table.length > 1){
+        const hpCost = (t) => (293.071 / interp(table, t)) * allInEH
+        const costGasPerMMBtuX = (1/0.1/afue)*gasAllIn
+        const tMin = Math.min(-20, table[0].x)
+        const tMax = Math.max(65, table[table.length-1].x)
+        let prevT = tMin
+        let prevDiff = hpCost(prevT) - costGasPerMMBtuX
+        for (let t=tMin+1; t<=tMax; t++){
+          const diff = hpCost(t) - costGasPerMMBtuX
           if ((prevDiff <= 0 && diff >= 0) || (prevDiff >= 0 && diff <= 0)) {
-            const frac = Math.abs(diff - prevDiff) < 1e-9 ? 0 : (0 - prevDiff) / (diff - prevDiff);
-            crossoverTemp = +(prevT + frac * (t - prevT)).toFixed(1);
-            break;
+            const frac = Math.abs(diff - prevDiff) < 1e-9 ? 0 : (0 - prevDiff) / (diff - prevDiff)
+            crossoverTemp = +(prevT + frac * (t - prevT)).toFixed(1)
+            break
           }
-          prevT = t; prevDiff = diff;
+          prevT = t
+          prevDiff = diff
         }
-        if (crossoverTemp === null) {
-          const diffAtMin = hpCost(tMin) - costGasPerMMBtu;
-          const diffAtMax = hpCost(tMax) - costGasPerMMBtu;
-          if (diffAtMin < 0 && diffAtMax < 0) crossoverNote = "HP cheaper at all temps";
-          else if (diffAtMin > 0 && diffAtMax > 0) crossoverNote = "Gas cheaper at all temps";
-          else crossoverNote = "Crossover outside modeled range";
+        if (crossoverTemp === null){
+          const dMin = hpCost(tMin) - costGasPerMMBtuX
+          const dMax = hpCost(tMax) - costGasPerMMBtuX
+          if (dMin < 0 && dMax < 0)      crossoverNote = "HP cheaper at all temperatures in range"
+          else if (dMin > 0 && dMax > 0) crossoverNote = "Gas cheaper at all temperatures in range"
+          else                            crossoverNote = "Crossover outside modeled temperature range"
         }
       }
+
+      // Expose crossover results on calc object by attaching to a local scope we return
+      // (We attach after hybrid calc so we can use allInEH & gasAllIn above.)
+      // We'll add to `ret` near the end.
+      var _crossover = { crossoverTemp, crossoverNote }
+
     } else {
-      crossoverNote = "Provide a COP table to compute a precise crossover temperature";
+      hpKWh = (heatMMBtu*293.071)/seasonalCOP
+      var _crossover = { crossoverTemp: null, crossoverNote: "Provide a COP table to compute a precise crossover temperature" }
     }
+
+    const allElectric = (kwhBase + hpKWh) * allInEH
+
+    const savingsAll = baseline - allElectric
+    const savingsHybrid = hybrid!=null ? baseline - hybrid : null
+    const net = gross - credits
+    const paybackAll = savingsAll>0 ? net/savingsAll : null
+    const paybackHybrid = (savingsHybrid && savingsHybrid>0) ? net/savingsHybrid : null
+    const dfcSavings = kwhBase * ((dfcNon - dfcEH)/100)
+
+    const gasHeatCost = (heatMMBtu/0.1/afue)*gasAllIn
+    const hpHeatCost  = hpKWh * allInEH
+    const fuelSwitch  = gasHeatCost - hpHeatCost
 
     const chart = [
-      { name: "Baseline (Gas+AC)", cost: Math.round(baseline) },
-      { name: "All-Electric HP",   cost: Math.round(allElectric) },
-      ...(hybrid != null ? [{ name: "Hybrid (cheapest)", cost: Math.round(hybrid) }] : []),
-    ];
+      { name:'Baseline (Gas+AC)', cost: Math.round(baseline) },
+      { name:'All-Electric HP',   cost: Math.round(allElectric) },
+      ...(hybrid!=null ? [{ name:'Hybrid (cheapest)', cost: Math.round(hybrid)}] : []),
+    ]
 
-    return {
+    const ret = {
       baseline: Math.round(baseline),
       allElectric: Math.round(allElectric),
-      hybrid: hybrid != null ? Math.round(hybrid) : null,
-      hybridGasMMBtu: Number(hybridGasMMBtu.toFixed(1)),
-      hybridHPkWh: Math.round(hybridHPkWh),
+      hybrid: hybrid!=null ? Math.round(hybrid) : null,
       savingsAll: Math.round(savingsAll),
-      savingsHybrid: savingsHybrid != null ? Math.round(savingsHybrid) : null,
-      paybackAll: paybackAll ? Number(paybackAll.toFixed(1)) : null,
-      paybackHybrid: paybackHybrid ? Number(paybackHybrid.toFixed(1)) : null,
+      savingsHybrid: savingsHybrid!=null ? Math.round(savingsHybrid) : null,
+      paybackAll: paybackAll ? +paybackAll.toFixed(1) : null,
+      paybackHybrid: paybackHybrid ? +paybackHybrid.toFixed(1) : null,
       dfcSavings: Math.round(dfcSavings),
-      gasHeatCost: Math.round((heatMMBtu / 0.1 / afue) * gasAllIn),
-      hpHeatCost: Math.round(hpKWh * allInEH),
-      fuelSwitchSavings: Math.round(((heatMMBtu / 0.1 / afue) * gasAllIn) - (hpKWh * allInEH)),
-      chart,
-      crossoverTemp,
-      crossoverNote,
-      crossoverSeries,
-      matrix,
-    };
-  }, [inputs, useCopTable, copText, binsText]);
+      gasHeatCost: Math.round(gasHeatCost),
+      hpHeatCost: Math.round(hpHeatCost),
+      fuelSwitch: Math.round(fuelSwitch),
+      chart
+    }
+    // merge crossover fields in
+    return { ...ret, ..._crossover }
+  }, [f, useTable, copText, binsText])
 
-  const reset = () => {
-    setInputs({
-      kwhBase: String(DEFAULTS.kwhBase),
-      supplyC: String(DEFAULTS.supplyC),
-      txC: String(DEFAULTS.txC),
-      dfcNon: String(DEFAULTS.dfcNon),
-      dfcEH: String(DEFAULTS.dfcEH),
-      gasSupply: String(DEFAULTS.gasSupply),
-      gasDist: String(DEFAULTS.gasDist),
-      afue: String(DEFAULTS.afue),
-      heatMMBtu: String(DEFAULTS.heatMMBtu),
-      seasonalCOP: String(DEFAULTS.seasonalCOP),
-      gross: String(DEFAULTS.gross),
-      credits: String(DEFAULTS.credits),
-    });
-    setUseCopTable(true);
-    setCopText(DEFAULT_COP);
-    setBinsText(DEFAULT_BINS);
-  };
+  const set = (k) => (e) => setF(s => ({...s, [k]: e.target.value}))
+  const reset = () => setF(Object.fromEntries(Object.entries(D).map(([k,v])=>[k,String(v)])))
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <h1 className="text-3xl font-bold">Heat Pump Break-Even & Payback Calculator</h1>
-      <p className="text-muted-foreground">
-        Enter your numbers or use the Chicago defaults. Toggle COP Table for hybrid switching and matrix output.
-      </p>
+    <div className="container">
+      <h1>Heat Pump Break-Even & Payback</h1>
+      <p className="note">No login needed. Enter your inputs or use the Chicago defaults and compare Baseline vs All-Electric vs Hybrid (bin-by-bin).</p>
 
-      {/* ---- Input Forms ---- */}
-      <div className="grid md:grid-cols-3 gap-4">
-        <Card className="shadow-sm">
-          <CardContent className="p-4 space-y-3">
-            <h2 className="font-semibold text-lg">Electricity</h2>
-            <Label>Annual non-heating kWh</Label>
-            <Input value={inputs.kwhBase} onChange={(e)=>upd("kwhBase", e.target.value)} />
-            <div className="grid grid-cols-3 gap-2">
-              <div><Label>Supply (¢/kWh)</Label><Input value={inputs.supplyC} onChange={(e)=>upd("supplyC", e.target.value)} /></div>
-              <div><Label>TX (¢/kWh)</Label><Input value={inputs.txC} onChange={(e)=>upd("txC", e.target.value)} /></div>
-              <div><Label>DFC non-elec (¢/kWh)</Label><Input value={inputs.dfcNon} onChange={(e)=>upd("dfcNon", e.target.value)} /></div>
-            </div>
-            <div><Label>DFC electric-heat (¢/kWh)</Label><Input value={inputs.dfcEH} onChange={(e)=>upd("dfcEH", e.target.value)} /></div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-3" style={{gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))'}}>
+        <div className="card">
+          <h2>Electricity</h2>
+          <label>Annual non-heating kWh</label><input value={f.kwhBase} onChange={set('kwhBase')} />
+          <div className="grid grid-3">
+            <div><label>Supply (¢/kWh)</label><input value={f.supplyC} onChange={set('supplyC')} /></div>
+            <div><label>TX (¢/kWh)</label><input value={f.txC} onChange={set('txC')} /></div>
+            <div><label>DFC non-elec (¢/kWh)</label><input value={f.dfcNon} onChange={set('dfcNon')} /></div>
+          </div>
+          <label>DFC electric-heat (¢/kWh)</label><input value={f.dfcEH} onChange={set('dfcEH')} />
+        </div>
 
-        <Card className="shadow-sm">
-          <CardContent className="p-4 space-y-3">
-            <h2 className="font-semibold text-lg">Gas & Heating</h2>
-            <div className="grid grid-cols-2 gap-2">
-              <div><Label>Gas supply ($/therm)</Label><Input value={inputs.gasSupply} onChange={(e)=>upd("gasSupply", e.target.value)} /></div>
-              <div><Label>Gas delivery ($/therm)</Label><Input value={inputs.gasDist} onChange={(e)=>upd("gasDist", e.target.value)} /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div><Label>AFUE (0–1)</Label><Input value={inputs.afue} onChange={(e)=>upd("afue", e.target.value)} /></div>
-              <div><Label>Heat load (MMBtu/yr)</Label><Input value={inputs.heatMMBtu} onChange={(e)=>upd("heatMMBtu", e.target.value)} /></div>
-            </div>
-            <div className="flex items-center gap-2 pt-1">
-              <Switch checked={useCopTable} onCheckedChange={setUseCopTable} id="copSwitch" />
-              <Label htmlFor="copSwitch">Use COP table + hybrid switching + matrix</Label>
-            </div>
-            {!useCopTable && (
-              <div>
-                <Label>Seasonal COP</Label>
-                <Input value={inputs.seasonalCOP} onChange={(e)=>upd("seasonalCOP", e.target.value)} />
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="card">
+          <h2>Gas & Heating</h2>
+          <div className="grid grid-2">
+            <div><label>Gas supply ($/therm)</label><input value={f.gasSupply} onChange={set('gasSupply')} /></div>
+            <div><label>Gas delivery ($/therm)</label><input value={f.gasDist} onChange={set('gasDist')} /></div>
+          </div>
+          <div className="grid grid-2">
+            <div><label>AFUE (0–1)</label><input value={f.afue} onChange={set('afue')} /></div>
+            <div><label>Heat load (MMBtu/yr)</label><input value={f.heatMMBtu} onChange={set('heatMMBtu')} /></div>
+          </div>
+          <div className="row" style={{marginTop:8}}>
+            <input type="checkbox" id="usetable" checked={useTable} onChange={()=>setUseTable(v=>!v)} />
+            <label htmlFor="usetable">Use COP table + hybrid switching</label>
+          </div>
+          {!useTable && (<><label>Seasonal COP</label><input value={f.seasonalCOP} onChange={set('seasonalCOP')} /></>)}
+        </div>
 
-        <Card className="shadow-sm">
-          <CardContent className="p-4 space-y-3">
-            <h2 className="font-semibold text-lg">Project Costs</h2>
-            <div className="grid grid-cols-2 gap-2">
-              <div><Label>Gross install ($)</Label><Input value={inputs.gross} onChange={(e)=>upd("gross", e.target.value)} /></div>
-              <div><Label>Tax credits ($)</Label><Input value={inputs.credits} onChange={(e)=>upd("credits", e.target.value)} /></div>
-            </div>
-            <div className="pt-2 flex gap-2">
-              <Button onClick={reset} variant="secondary">Reset Defaults</Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="card">
+          <h2>Project Costs</h2>
+          <div className="grid grid-2">
+            <div><label>Gross install ($)</label><input value={f.gross} onChange={set('gross')} /></div>
+            <div><label>Tax credits ($)</label><input value={f.credits} onChange={set('credits')} /></div>
+          </div>
+          <div className="row" style={{marginTop:10}}>
+            <button className="btn secondary" onClick={reset}>Use Defaults</button>
+          </div>
+        </div>
       </div>
 
-      {useCopTable && (
-        <div className="grid md:grid-cols-2 gap-4">
-          <Card className="shadow-sm">
-            <CardContent className="p-4 space-y-2">
-              <h3 className="font-semibold">COP Table (°F:COP)</h3>
-              <Textarea value={copText} onChange={(e)=>setCopText(e.target.value)} className="min-h-[180px]" />
-              <p className="text-sm text-muted-foreground">One pair per line or comma-separated. We linearly interpolate.</p>
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm">
-            <CardContent className="p-4 space-y-2">
-              <h3 className="font-semibold">Weather Bins (°F:% of heating)</h3>
-              <Textarea value={binsText} onChange={(e)=>setBinsText(e.target.value)} className="min-h-[180px]" />
-              <p className="text-sm text-muted-foreground">We normalize to 100%. Defaults approximate Chicago.</p>
-            </CardContent>
-          </Card>
+      {useTable && (
+        <div className="grid grid-2" style={{gridTemplateColumns:'repeat(auto-fit, minmax(320px, 1fr))', marginTop:16}}>
+          <div className="card">
+            <h2>COP Table (°F:COP)</h2>
+            <textarea rows="10" value={copText} onChange={e=>setCopText(e.target.value)} />
+            <p className="note">One per line or comma-separated. We linearly interpolate.</p>
+          </div>
+          <div className="card">
+            <h2>Weather Bins (°F:% of heating)</h2>
+            <textarea rows="10" value={binsText} onChange={e=>setBinsText(e.target.value)} />
+            <p className="note">We normalize to 100%. Defaults approximate Chicago.</p>
+          </div>
         </div>
       )}
 
-      {/* ---- Results & Charts ---- */}
-      <div className="grid md:grid-cols-2 gap-4 items-stretch">
-        <Card className="shadow-sm">
-          <CardContent className="p-4 space-y-3">
-            <h2 className="font-semibold text-lg">Results</h2>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="p-3 rounded-2xl bg-muted">
-                <div className="text-xs text-muted-foreground">Baseline (Gas+AC)</div>
-                <div className="text-xl font-bold">${calc.baseline.toLocaleString()}</div>
-              </div>
-              <div className="p-3 rounded-2xl bg-muted">
-                <div className="text-xs text-muted-foreground">All-Electric HP</div>
-                <div className="text-xl font-bold">${calc.allElectric.toLocaleString()}</div>
-              </div>
-              {calc.hybrid !== null && (
-                <div className="p-3 rounded-2xl bg-muted col-span-2">
-                  <div className="text-xs text-muted-foreground">Hybrid (cheapest by bin)</div>
-                  <div className="text-xl font-bold">${calc.hybrid.toLocaleString()}</div>
-                </div>
-              )}
-            </div>
+      <div className="grid grid-2" style={{gridTemplateColumns:'repeat(auto-fit, minmax(320px, 1fr))', marginTop:16}}>
+        <div className="card">
+          <h2>Results</h2>
+          <div className="grid grid-2">
+            <div className="pill muted"><div className="note">Baseline (Gas+AC)</div><div style={{fontSize:22,fontWeight:700}}>${(calc.baseline).toLocaleString()}</div></div>
+            <div className="pill muted"><div className="note">All-Electric HP</div><div style={{fontSize:22,fontWeight:700}}>${(calc.allElectric).toLocaleString()}</div></div>
+            {calc.hybrid!==null && <div className="pill muted" style={{gridColumn:'1 / -1'}}><div className="note">Hybrid (cheapest)</div><div style={{fontSize:22,fontWeight:700}}>${(calc.hybrid).toLocaleString()}</div></div>}
+          </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              <div className="p-3 rounded-2xl bg-green-50">
-                <div className="text-xs text-muted-foreground">Annual Savings vs Baseline</div>
-                <div className="text-xl font-bold">${calc.savingsAll.toLocaleString()}</div>
-              </div>
-              <div className="p-3 rounded-2xl bg-blue-50">
-                <div className="text-xs text-muted-foreground">DFC Savings on Base kWh</div>
-                <div className="text-xl font-bold">${calc.dfcSavings.toLocaleString()}/yr</div>
-              </div>
+          <div className="grid grid-2" style={{marginTop:8}}>
+            <div className="pill good">
+              <div className="note">Annual savings vs Baseline</div>
+              <div style={{fontSize:22,fontWeight:700}}>${(calc.savingsAll).toLocaleString()}</div>
             </div>
-
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              <div className="p-3 rounded-2xl bg-amber-50">
-                <div className="text-xs text-muted-foreground">Simple Payback (All-Electric)</div>
-                <div className="text-xl font-bold">{calc.paybackAll ? `${calc.paybackAll} yrs` : "—"}</div>
-              </div>
-              {calc.hybrid !== null && (
-                <div className="p-3 rounded-2xl bg-amber-50">
-                  <div className="text-xs text-muted-foreground">Simple Payback (Hybrid)</div>
-                  <div className="text-xl font-bold">{calc.paybackHybrid ? `${calc.paybackHybrid} yrs` : "—"}</div>
-                </div>
-              )}
+            <div className="pill muted">
+              <div className="note">Simple payback (All-Electric)</div>
+              <div style={{fontSize:22,fontWeight:700}}>{calc.paybackAll ? `${calc.paybackAll} yrs` : '—'}</div>
             </div>
+          </div>
 
-            <div className="text-sm text-muted-foreground pt-2">
-              Optimal crossover temperature:&nbsp;
-              {calc.crossoverTemp !== null ? <b>{calc.crossoverTemp}°F</b> : <em>{calc.crossoverNote || "—"}</em>}
+          <div className="pill muted" style={{marginTop:8}}>
+            <div className="note">DFC savings on base kWh (delivery only)</div>
+            <div style={{fontSize:20,fontWeight:700}}>${(calc.dfcSavings).toLocaleString()}/yr</div>
+          </div>
+
+          <div className="pill muted" style={{marginTop:8}}>
+            <div className="note">Heating cost comparison (isolates fuel switch)</div>
+            <div>Gas heat: ${calc.gasHeatCost?.toLocaleString?.() ?? '—'} &nbsp; | &nbsp; HP heat: ${calc.hpHeatCost?.toLocaleString?.() ?? '—'} &nbsp; → &nbsp; Fuel-switch savings: <b>${Math.max(0,calc.fuelSwitch).toLocaleString()}</b></div>
+          </div>
+
+          <div className="pill muted" style={{marginTop:8}}>
+            <div className="note">Optimal crossover temperature (HP $/MMBtu = Gas $/MMBtu)</div>
+            <div style={{fontSize:18,fontWeight:700}}>
+              {calc.crossoverTemp !== null ? `${calc.crossoverTemp}°F` : (calc.crossoverNote || '—')}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="shadow-sm">
-          <CardContent className="p-4 h-full">
-            <h2 className="font-semibold text-lg mb-2">Cost Comparison</h2>
-            <div className="w-full h-64">
-              <ResponsiveContainer>
-                <BarChart data={calc.chart}>
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip formatter={(v)=>`$${Number(v).toLocaleString()}`} />
-                  <Bar dataKey="cost" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ---- Matrix Output (per bin) ---- */}
-      {useCopTable && (
-        <Card className="shadow-sm">
-          <CardContent className="p-4">
-            <h2 className="font-semibold text-lg mb-2">Temperature-by-Bin Matrix</h2>
-            <div className="overflow-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left">
-                    <th className="py-2 pr-4">Temp (°F)</th>
-                    <th className="py-2 pr-4">% of Heat</th>
-                    <th className="py-2 pr-4">COP</th>
-                    <th className="py-2 pr-4">HP $/MMBtu</th>
-                    <th className="py-2 pr-4">Gas $/MMBtu</th>
-                    <th className="py-2 pr-4">Cheaper</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {calc.matrix.map((r, i) => (
-                    <tr key={i} className="border-t">
-                      <td className="py-1 pr-4">{r.t}</td>
-                      <td className="py-1 pr-4">{r.pct}%</td>
-                      <td className="py-1 pr-4">{r.cop}</td>
-                      <td className="py-1 pr-4">${r.hpCost.toFixed(2)}</td>
-                      <td className="py-1 pr-4">${r.gasCost.toFixed(2)}</td>
-                      <td className="py-1 pr-4">{r.cheaper}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="text-sm text-muted-foreground mt-2">
-              Matrix shows cost per delivered MMBtu by temperature bin using your COP curve and electric-heat rate.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ---- Crossover Chart ---- */}
-      <Card className="shadow-sm">
-        <CardContent className="p-4 h-full">
-          <h2 className="font-semibold text-lg mb-2">Crossover Cost Curve</h2>
-          <div className="w-full h-64">
+        <div className="card">
+          <h2>Cost Comparison</h2>
+          <div style={{width:'100%', height:300}}>
             <ResponsiveContainer>
-              <LineChart data={calc.crossoverSeries}>
-                <XAxis dataKey="t" label={{ value: "Temperature (°F)", position: "insideBottom", offset: -5 }} />
-                <YAxis label={{ value: "$ per MMBtu", angle: -90, position: "insideLeft" }} />
-                <Tooltip formatter={(v)=>`$${Number(v).toFixed(2)}`} />
-                <Legend />
-                <Line type="monotone" dataKey="hp" name="HP $/MMBtu" dot={false} />
-                <Line type="monotone" dataKey="gas" name="Gas $/MMBtu" dot={false} />
-              </LineChart>
+              <BarChart data={calc.chart}>
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip formatter={(v)=>`$${Number(v).toLocaleString()}`} />
+                <Bar dataKey="cost" />
+              </BarChart>
             </ResponsiveContainer>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
-  );
+  )
 }
