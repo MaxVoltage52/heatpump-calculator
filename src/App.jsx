@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, ReferenceLine, Legend} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 // ---------- Helpers ----------
 function toNumber(value, fallback = 0) {
@@ -230,25 +230,6 @@ export default function App() {
     const hpHeatCost = hpKWh * allInEH;
     const fuelSwitchSavings = gasHeatCost - hpHeatCost;
 
-// Build cost curve for plotting HP vs Gas cost across temperature
-let costCurve = [];
-if (useCopTable) {
-  const table = parsePairs(copText);
-  if (table.length > 1) {
-    const tMin = Math.min(-20, table[0].x);
-    const tMax = Math.max(65, table[table.length - 1].x);
-    const hpCostAt = (t) => (293.071 / interpCOP(table, t)) * allInEH; // $/MMBtu delivered
-    for (let t = tMin; t <= tMax; t += 1) {
-      costCurve.push({
-        t,
-        hpCost: +hpCostAt(t).toFixed(2),
-        gasCost: +costGasPerMMBtu.toFixed(2),
-      });
-    }
-  }
-}
-
-
     const chart = [
       { name: "Baseline (Gas+AC)", cost: Math.round(baseline) },
       { name: "All-Electric HP", cost: Math.round(allElectric) },
@@ -273,7 +254,6 @@ if (useCopTable) {
       chart,
       crossoverTemp,
       crossoverNote,
-      costCurve,
     };
   }, [inputs, useCopTable, copText, binsText]);
 
@@ -483,43 +463,6 @@ if (useCopTable) {
             </div>
           </CardContent>
         </Card>
-
-{useCopTable && calc.costCurve && calc.costCurve.length > 0 && (
-  <Card className="shadow-sm">
-    <CardContent className="p-4 h-full">
-      <h2 className="font-semibold text-lg mb-2">Cost vs Temperature</h2>
-      <div className="w-full h-72">
-        <ResponsiveContainer>
-          <LineChart data={calc.costCurve}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="t" unit="°F" />
-            <YAxis
-              label={{ value: "$/MMBtu (delivered)", angle: -90, position: "insideLeft" }}
-            />
-            <Tooltip />
-            <Legend />
-            <Line type="monotone" dataKey="hpCost" name="HP cost" dot={false} />
-            <Line type="monotone" dataKey="gasCost" name="Gas cost" dot={false} />
-            {calc.crossoverTemp !== null && (
-              <ReferenceLine
-                x={calc.crossoverTemp}
-                label={{ value: `Crossover ${calc.crossoverTemp}°F`, position: "top" }}
-                strokeDasharray="4 4"
-              />
-            )}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="text-sm text-muted-foreground mt-2">
-        {calc.crossoverTemp !== null
-          ? <>Optimal crossover temperature: <b>{calc.crossoverTemp}°F</b></>
-          : <>{calc.crossoverNote || "Provide a COP table to compute a precise crossover temperature."}</>}
-      </div>
-    </CardContent>
-  </Card>
-)}
-
-
       </div>
 
       {/* Savings Breakdown Card */}
