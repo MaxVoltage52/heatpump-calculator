@@ -1,3 +1,4 @@
+# .github/workflows/pages.yml
 name: Deploy to GitHub Pages
 
 on:
@@ -25,22 +26,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
-      - name: Install dependencies (ci if lockfile, else install)
-        run: |
-          if [ -f package-lock.json ]; then
-            echo "Lockfile found → using npm ci"
-            npm ci
-          else
-            echo "No lockfile → using npm install"
-            npm install
-          fi
+      - name: Install deps
+        run: npm ci
 
       - name: Build
         run: npm run build
-        env:
-          CI: false
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
