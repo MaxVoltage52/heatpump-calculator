@@ -121,6 +121,9 @@ export default function App(){
     let hpKWh = 0
     let hybrid = null, hybridGas=0, hybridHPkWh=0
 
+    let crossoverTemp = null
+    let crossoverNote = ""
+
     if (useTable){
       const table = pairs(copText)
       const bins  = normBins(pairs(binsText))
@@ -148,18 +151,14 @@ export default function App(){
       hybrid = kwhBase*allInEH + costHPsum + costGASsum
 
       // ---- Crossover temperature (HP $/MMBtu = Gas $/MMBtu) ----
-      // Solve for T where (293.071 / COP(T)) * allInEH == (1/0.1/afue) * gasAllIn
-      let crossoverTemp = null
-      let crossoverNote = ""
       if (table.length > 1){
         const hpCost = (t) => (293.071 / interp(table, t)) * allInEH
-        const costGasPerMMBtuX = (1/0.1/afue)*gasAllIn
         const tMin = Math.min(-20, table[0].x)
         const tMax = Math.max(65, table[table.length-1].x)
         let prevT = tMin
-        let prevDiff = hpCost(prevT) - costGasPerMMBtuX
+        let prevDiff = hpCost(prevT) - costGasPerMMBtu
         for (let t=tMin+1; t<=tMax; t++){
-          const diff = hpCost(t) - costGasPerMMBtuX
+          const diff = hpCost(t) - costGasPerMMBtu
           if ((prevDiff <= 0 && diff >= 0) || (prevDiff >= 0 && diff <= 0)) {
             const frac = Math.abs(diff - prevDiff) < 1e-9 ? 0 : (0 - prevDiff) / (diff - prevDiff)
             crossoverTemp = +(prevT + frac * (t - prevT)).toFixed(1)
@@ -169,22 +168,17 @@ export default function App(){
           prevDiff = diff
         }
         if (crossoverTemp === null){
-          const dMin = hpCost(tMin) - costGasPerMMBtuX
-          const dMax = hpCost(tMax) - costGasPerMMBtuX
+          const dMin = hpCost(tMin) - costGasPerMMBtu
+          const dMax = hpCost(tMax) - costGasPerMMBtu
           if (dMin < 0 && dMax < 0)      crossoverNote = "HP cheaper at all temperatures in range"
           else if (dMin > 0 && dMax > 0) crossoverNote = "Gas cheaper at all temperatures in range"
           else                            crossoverNote = "Crossover outside modeled temperature range"
         }
       }
 
-      // Expose crossover results on calc object by attaching to a local scope we return
-      // (We attach after hybrid calc so we can use allInEH & gasAllIn above.)
-      // We'll add to `ret` near the end.
-      var _crossover = { crossoverTemp, crossoverNote }
-
     } else {
       hpKWh = (heatMMBtu*293.071)/seasonalCOP
-      var _crossover = { crossoverTemp: null, crossoverNote: "Provide a COP table to compute a precise crossover temperature" }
+      crossoverNote = "Provide a COP table to compute a precise crossover temperature"
     }
 
     const allElectric = (kwhBase + hpKWh) * allInEH
@@ -206,22 +200,22 @@ export default function App(){
       ...(hybrid!=null ? [{ name:'Hybrid (cheapest)', cost: Math.round(hybrid)}] : []),
     ]
 
-    const ret = {
+    return {
       baseline: Math.round(baseline),
       allElectric: Math.round(allElectric),
       hybrid: hybrid!=null ? Math.round(hybrid) : null,
       savingsAll: Math.round(savingsAll),
       savingsHybrid: savingsHybrid!=null ? Math.round(savingsHybrid) : null,
       paybackAll: paybackAll ? +paybackAll.toFixed(1) : null,
-      paybackHybrid: paybackHybrid ? +paybackHybrid.toFixed(1) : null,
+      paybackHybrid: paybackHybrid ? +paybackHybrid.toFixed(1) : null, // <-- newly surfaced
       dfcSavings: Math.round(dfcSavings),
       gasHeatCost: Math.round(gasHeatCost),
       hpHeatCost: Math.round(hpHeatCost),
       fuelSwitch: Math.round(fuelSwitch),
+      crossoverTemp,
+      crossoverNote,
       chart
     }
-    // merge crossover fields in
-    return { ...ret, ..._crossover }
   }, [f, useTable, copText, binsText])
 
   const set = (k) => (e) => setF(s => ({...s, [k]: e.target.value}))
@@ -307,6 +301,14 @@ export default function App(){
               <div style={{fontSize:22,fontWeight:700}}>{calc.paybackAll ? `${calc.paybackAll} yrs` : '—'}</div>
             </div>
           </div>
+
+          {/* NEW: Hybrid payback (switching at crossover via bin-by-bin choice) */}
+          {calc.paybackHybrid !== null && (
+            <div className="pill muted" style={{marginTop:8}}>
+              <div className="note">Simple payback (Hybrid @ crossover)</div>
+              <div style={{fontSize:22,fontWeight:700}}>{`${calc.paybackHybrid} yrs`}</div>
+            </div>
+          )}
 
           <div className="pill muted" style={{marginTop:8}}>
             <div className="note">DFC savings on base kWh (delivery only)</div>
